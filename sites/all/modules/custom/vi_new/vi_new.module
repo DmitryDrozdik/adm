@@ -1,0 +1,270 @@
+<?php
+/**
+ * @file Provides custom functional
+ * @author Dmitry Drozdik
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function vi_new_menu() {
+  $items = array();
+  $items['admin/config/people/club'] = array(
+    'title' => 'Club anonymous Santa Claus',
+    'access arguments' => array('access administration pages'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('vi_new_generate_list'),
+    'type' => MENU_NORMAL_ITEM
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_fornm_alter().
+ */
+function vi_new_form_alter(&$form, &$form_state, $form_id) {
+  switch ($form_id) {
+    case 'user_profile_form':
+      $form['locale']['#access'] = FALSE;
+      $form['contact']['#access'] = FALSE;
+      $form['timezone']['#access'] = FALSE;
+      $form['account']['name']['#access'] = FALSE;
+      $form['field_virtual_name'][LANGUAGE_NONE][0]['value']['#description'] = t('ВНИМАНИЕ!!! В целях сохранения анонимности, не используйте имена, ники, прозвища и прочее из реальной жизни.');
+      break;
+
+    case 'contact_site_form':
+      $form['name']['#default_value'] = '';
+      break;
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function vi_new_menu_alter(&$items) {
+  $items['user/%user']['title callback'] = 'vi_new_user_title_callback';
+}
+
+/**
+ * Change user profile page title
+ */
+function vi_new_user_title_callback($user) {
+  return $user->field_virtual_name['und'][0]['value'];
+}
+
+/**
+ * Implements hook_user_view().
+ */
+function vi_new_user_view($account, $view_mode, $langcode) {
+  if (!empty($account->field_assigned_santa[LANGUAGE_NONE][0]['uid'])) {
+    $user = user_load($account->field_assigned_santa[LANGUAGE_NONE][0]['uid']);
+    $account->content['virt_name'] = array(
+      '#markup' => '<br /><strong>' . t('Виртуальное имя получателя твоего подарка:') . '</strong> ' . $user->field_virtual_name[LANGUAGE_NONE][0]['value'] . '<br />',
+      '#weight' => 48
+    );
+    $wishes = !empty($user->field_wishes[LANGUAGE_NONE][0]['value']) ? $user->field_wishes[LANGUAGE_NONE][0]['value'] : t('Тут было пусто. Видимо все равно, что ты подаришь.');
+    $account->content['virt_wishes'] = array(
+      '#markup' => '<strong>' . t('Пожелания получателя твоего подарка:') . '</strong> ' . $wishes,
+      '#weight' => 49
+    );
+    if (!isset($account->field_ready_present[LANGUAGE_NONE][0]['value']) || (int)$account->field_ready_present[LANGUAGE_NONE][0]['value'] != 1) {
+      $form = drupal_get_form('vi_new_ready_present_form');
+      $account->content['form'] = array(
+        '#markup' => drupal_render($form),
+        '#weight' => 50
+      );
+    }
+  }
+}
+
+/**
+ * Ready prsent form
+ *
+ * @see vi_new_ready_present_form_submit().
+ *
+ * @ingroup forms
+ */
+function vi_new_ready_present_form() {
+  $form = array();
+  $form['text'] = array(
+    '#markup' => '<div>' . t('Я участник клуба Анонимных Дедов Морозов, и я подтверждаю, что подготовил(а) подарок.') . '</div>'
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Да, мой подарок готов')
+  );
+  return $form;
+}
+
+/**
+ * Submittion form
+ *
+ * @see vi_new_ready_present_form().
+ *
+ * @ingroup forms
+ */
+function vi_new_ready_present_form_submit() {
+  global $user;
+  $account = user_load($user->uid);
+  $account->field_ready_present[LANGUAGE_NONE][0]['value'] = 1;
+  user_save($account);
+  drupal_set_message(t('Спасибо за участие, теперь жди дня получения подарков :), и не забудь подписать подарок именем того кому ты дарить будешь.'));
+}
+
+/**
+ * Admin settings
+ * @see vi_new_generate_list_submit()
+ *
+ * @ingroup forms
+ */
+function vi_new_generate_list() {
+  $form = array();
+
+  $form['generate'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Generate list'),
+    '#description' => t('Assign user names to other users')
+  );
+  $form['generate']['generate_list'] = array(
+    '#type' => 'submit',
+    '#value' => 'Generate List'
+  );
+
+  $form['send'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Send emails'),
+    '#description' => t('Send emails with names')
+  );
+  $form['send']['send_emails'] = array(
+    '#type' => 'submit',
+    '#value' => 'Send emails'
+  );
+  return $form;
+}
+
+/**
+ * Admin settings submit
+ * @see vi_new_generate_list()
+ *
+ * @ingroup forms
+ */
+function vi_new_generate_list_submit($form, &$form_state) {
+  switch ($form_state['values']['op']) {
+    case 'Generate List':
+      vi_new_generate_list_start();
+      break;
+
+    case 'Send emails':
+      vi_new_send_emails();
+      break;
+  }
+}
+
+/**
+ * Send emails about assigned users.
+ */
+function vi_new_send_emails() {
+  global $language;
+  $query = db_select('users', 'u')
+  // Select the whole record, so that format_username() has enough
+  // information.
+    ->fields('u', array('uid'));
+  $query->condition('u.uid', 0, '<>'); // Explicitly exclude the anonymous user.
+  $query->orderBy('u.uid');
+  $query->where('u.uid != 1');
+  $result = $query->execute()->fetchCol();
+  $i = 0;
+  foreach ($result as $key => $uid) {
+    $user = user_load($uid);
+    $params['account'] = $user;
+    if (isset($user->field_assigned_santa[LANGUAGE_NONE][0]['uid']) && !empty($user->field_assigned_santa[LANGUAGE_NONE][0]['uid'])) {
+      drupal_mail('vi_new', 'assigned_santa_claus_mail', $user->mail, $language, $params);
+      //drupal_mail('vi_new', 'assigned_santa_claus_mail', 'dmitriydrozdik@gmail.com', $language, $params);
+      $i++;
+    }
+  }
+  drupal_set_message(t('@count emails sent.', array('@count' => $i)));
+}
+
+/**
+ * Implements hook_mail().
+ */
+function vi_new_mail($key, &$message, $params) {
+  $language = $message['language'];
+  $variables = array('user' => $params['account']);
+  $result = vi_new_mail_edit_text($key, $language, $variables);
+  $message['subject'] .= $result['subject'];
+  $message['body'][] = $result['body'];
+}
+
+/**
+ * Start assign users
+ */
+function vi_new_generate_list_start() {
+  $query = db_select('users', 'u')
+  // Select the whole record, so that format_username() has enough
+  // information.
+    ->fields('u', array('uid'));
+  $query->condition('u.uid', 0, '<>'); // Explicitly exclude the anonymous user.
+  $query->orderBy('u.uid');
+  $query->where('u.uid != 1');
+  $result = $query->execute()->fetchCol();
+
+  $assigned = array();
+  $sort_results = $result;
+  shuffle($sort_results);
+  foreach ($result as $key => $uid) {
+    if ($uid != $sort_results[$key]) {
+      $assigned[$uid] = $sort_results[$key];
+    }
+    else {
+      $assigned[$uid] = $sort_results[$key + 1];
+      $sort_results[$key + 1] = $uid;
+    }
+  }
+  $users = user_load_multiple($result);
+  foreach ($users as $user) {
+    $user->field_assigned_santa[LANGUAGE_NONE][0]['uid'] = $assigned[$user->uid];
+    user_save($user);
+  }
+  drupal_set_message('All users assigned.');
+}
+
+/**
+ * Implements hook_mail_edit_text().
+ *
+ * @param string $mailkey
+ * @param object $language
+ *
+ * @return array
+ */
+function vi_new_mail_edit_text($mailkey, $language, $vars) {
+  $return = array();
+  $langcode = isset($language) ? $language->language : NULL;
+  switch ($mailkey) {
+    case 'assigned_santa_claus_mail':
+      $return['subject'] = t('Вам назначен анонимный Дед Мороз в клубе Анонимных Дедов Морозов', array(), array('langcode' => $langcode));
+      $user = $vars['user'];
+      $santa = user_load($user->field_assigned_santa[LANGUAGE_NONE][0]['uid']);
+      $args = array(
+        '@virt_name' => $user->field_virtual_name[LANGUAGE_NONE][0]['value'],
+        '@santa_name' => $santa->field_virtual_name[LANGUAGE_NONE][0]['value'],
+        '@santa_wishes' => !empty($santa->field_wishes[LANGUAGE_NONE][0]['value']) ? $santa->field_wishes[LANGUAGE_NONE][0]['value'] : t('Тут было пусто. Видимо все равно, что ты подаришь.'),
+        '!login_link' => l(t('Подтвердить!!'), 'user', array(
+          'absolute' => TRUE,
+          'query' => array('destination' => 'user')
+        ))
+      );
+
+      $return['body'] = t("Привет @virt_name,<br><br>
+Спешу сообщить тебе, что регистрация участников закончилась, и теперь время готовить подарки. До нового года осталось не так много времени, поэтому торопись подготовить подарок.<br><br>
+Итак, далее информацию которую ты ждешь с нетерпением:<br><br>
+Имя твоего Деда Мороза: <b>@santa_name</b><br><br>
+Пожелания от твоего Деда мороза:<b>@santa_wishes</b><br><br>
+Если ты уже подготовил подарок, то пройди на страницу профиля и подтверди наличие подарка:<br><br>
+ !login_link<br/><br/>
+-- Главный Дед Мороз", $args, array('langcode' => $langcode));
+      break;
+  }
+  return $return;
+}

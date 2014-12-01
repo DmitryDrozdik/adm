@@ -1,0 +1,4 @@
+name = Club anonymous Santa Claus
+description = "Provides a custom functional"
+package = Custom
+core = 7.x
