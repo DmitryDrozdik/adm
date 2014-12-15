@@ -207,7 +207,7 @@ function vi_new_generate_list_start() {
     ->fields('u', array('uid'));
   $query->condition('u.uid', 0, '<>'); // Explicitly exclude the anonymous user.
   $query->orderBy('u.uid');
-  $query->where('u.uid != 1');
+  $query->condition('u.uid', 1, '!=');
   $result = $query->execute()->fetchCol();
 
   $assigned = array();
