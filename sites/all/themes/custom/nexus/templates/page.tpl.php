@@ -270,7 +270,7 @@
   <div class="container">
     <div class="row">
       <div class="fcred col-sm-12">
-        <?php print t('Copyright'); ?> &copy; 2012-2013,
+        <?php print t('Copyright'); ?> &copy; 2012-<?php print date('Y'); ?>,
         <a href="<?php print $front_page; ?>"><?php print $site_name; ?></a>.
       </div>
     </div>
