@@ -181,7 +181,6 @@ function vi_new_send_emails($log = FALSE) {
     $params['account'] = $user;
     if (isset($user->field_assigned_santa[LANGUAGE_NONE][0]['uid']) && !empty($user->field_assigned_santa[LANGUAGE_NONE][0]['uid'])) {
       drupal_mail('vi_new', 'assigned_santa_claus_mail', $user->mail, $language, $params);
-      //drupal_mail('vi_new', 'assigned_santa_claus_mail', 'dmitriydrozdik@gmail.com', $language, $params);
       $i++;
     }
   }
@@ -228,6 +227,14 @@ function vi_new_generate_list_start($log = FALSE) {
   }
 }
 
+/**
+ * Try generate list of assigned users to each other
+ *
+ * @param array $result
+ *  List of user ids
+ *
+ * @return array
+ */
 function vi_new_generate_list_recursive($result) {
   $stop = FALSE;
   $assigned = array();
@@ -240,6 +247,7 @@ function vi_new_generate_list_recursive($result) {
     else {
       if (isset($sort_results[$key + 1])) {
         $assigned[$uid] = $sort_results[$key + 1];
+        $sort_results[$key + 1] = $uid;
       }
       else {
         $stop = TRUE;
@@ -326,9 +334,9 @@ function vi_new_assign_and_send_emails() {
   $timezone = variable_get('date_default_timezone', 'Europe/Moscow');
   $countdown = variable_get('jquery_countdown_timer_date');
   $date = new DateTime('now', new DateTimeZone($timezone));
-//  if ($date->format('Y-m-d H:i') == $countdown) {
-  vi_new_generate_list_start(TRUE);
-  vi_new_send_emails(TRUE);
-  variable_set('user_register', 0);
-//  }
+  if ($date->format('Y-m-d H:i') == $countdown) {
+    vi_new_generate_list_start(TRUE);
+    vi_new_send_emails(TRUE);
+    variable_set('user_register', 0);
+  }
 }
