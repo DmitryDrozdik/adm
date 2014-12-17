@@ -18,9 +18,20 @@ function nexus_breadcrumb($variables) {
     // Use CSS to hide titile .element-invisible.
     $output = '<h2 class="element-invisible">' . t('You are here') . '</h2>';
     // comment below line to hide current page to breadcrumb
-$breadcrumb[] = drupal_get_title();
+    $breadcrumb[] = drupal_get_title();
     $output .= '<nav class="breadcrumb">' . implode(' » ', $breadcrumb) . '</nav>';
+
     return $output;
+  }
+}
+
+/**
+ * Override or insert variables into the html template.
+ */
+function nexus_preprocess_html(&$vars) {
+  $register = variable_get('user_register', 0);
+  if ($register == 0) {
+    $vars['classes_array'][] = 'registration-closed';
   }
 }
 
@@ -65,8 +76,8 @@ function nexus_preprocess_page(&$vars) {
    * Add javascript files for front-page jquery slideshow.
    */
 //  if (drupal_is_front_page()) {
-    drupal_add_js(drupal_get_path('theme', 'nexus') . '/js/jquery.flexslider.js');
-    drupal_add_js(drupal_get_path('theme', 'nexus') . '/js/slide.js');
+  drupal_add_js(drupal_get_path('theme', 'nexus') . '/js/jquery.flexslider.js');
+  drupal_add_js(drupal_get_path('theme', 'nexus') . '/js/slide.js');
 //  }
 }
 
@@ -88,6 +99,7 @@ function nexus_menu_local_tasks(&$variables) {
     $variables['secondary']['#suffix'] = '</ul>';
     $output .= drupal_render($variables['secondary']);
   }
+
   return $output;
 }
 
@@ -99,7 +111,7 @@ function nexus_preprocess_node(&$variables) {
   if ($variables['view_mode'] == 'full' && node_is_page($variables['node'])) {
     $variables['classes_array'][] = 'node-full';
   }
-  $variables['date'] = t('!datetime', array('!datetime' =>  date('j F Y', $variables['created'])));
+  $variables['date'] = t('!datetime', array('!datetime' => date('j F Y', $variables['created'])));
 }
 
 function nexus_page_alter($page) {
@@ -108,8 +120,8 @@ function nexus_page_alter($page) {
     '#type' => 'html_tag',
     '#tag' => 'meta',
     '#attributes' => array(
-    'name' =>  'viewport',
-    'content' =>  'width=device-width, initial-scale=1, maximum-scale=1'
+      'name' => 'viewport',
+      'content' => 'width=device-width, initial-scale=1, maximum-scale=1'
     )
   );
   drupal_add_html_head($viewport, 'viewport');

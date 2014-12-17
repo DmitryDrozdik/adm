@@ -16,11 +16,12 @@ function vi_new_menu() {
     'page arguments' => array('vi_new_generate_list'),
     'type' => MENU_NORMAL_ITEM
   );
+
   return $items;
 }
 
 /**
- * Implements hook_fornm_alter().
+ * Implements hook_form_alter().
  */
 function vi_new_form_alter(&$form, &$form_state, $form_id) {
   switch ($form_id) {
@@ -67,7 +68,7 @@ function vi_new_user_view($account, $view_mode, $langcode) {
       '#markup' => '<strong>' . t('Пожелания получателя твоего подарка:') . '</strong> ' . $wishes,
       '#weight' => 49
     );
-    if (!isset($account->field_ready_present[LANGUAGE_NONE][0]['value']) || (int)$account->field_ready_present[LANGUAGE_NONE][0]['value'] != 1) {
+    if (!isset($account->field_ready_present[LANGUAGE_NONE][0]['value']) || (int) $account->field_ready_present[LANGUAGE_NONE][0]['value'] != 1) {
       $form = drupal_get_form('vi_new_ready_present_form');
       $account->content['form'] = array(
         '#markup' => drupal_render($form),
@@ -78,7 +79,7 @@ function vi_new_user_view($account, $view_mode, $langcode) {
 }
 
 /**
- * Ready prsent form
+ * Ready present form
  *
  * @see vi_new_ready_present_form_submit().
  *
@@ -93,11 +94,12 @@ function vi_new_ready_present_form() {
     '#type' => 'submit',
     '#value' => t('Да, мой подарок готов')
   );
+
   return $form;
 }
 
 /**
- * Submittion form
+ * Submission form
  *
  * @see vi_new_ready_present_form().
  *
@@ -113,6 +115,7 @@ function vi_new_ready_present_form_submit() {
 
 /**
  * Admin settings
+ *
  * @see vi_new_generate_list_submit()
  *
  * @ingroup forms
@@ -139,11 +142,13 @@ function vi_new_generate_list() {
     '#type' => 'submit',
     '#value' => 'Send emails'
   );
+
   return $form;
 }
 
 /**
  * Admin settings submit
+ *
  * @see vi_new_generate_list()
  *
  * @ingroup forms
@@ -163,18 +168,15 @@ function vi_new_generate_list_submit($form, &$form_state) {
 /**
  * Send emails about assigned users.
  */
-function vi_new_send_emails() {
+function vi_new_send_emails($log = FALSE) {
   global $language;
-  $query = db_select('users', 'u')
-  // Select the whole record, so that format_username() has enough
-  // information.
-    ->fields('u', array('uid'));
+  $query = db_select('users', 'u')->fields('u', array('uid'));
   $query->condition('u.uid', 0, '<>'); // Explicitly exclude the anonymous user.
   $query->orderBy('u.uid');
   $query->where('u.uid != 1');
   $result = $query->execute()->fetchCol();
   $i = 0;
-  foreach ($result as $key => $uid) {
+  foreach ($result as $uid) {
     $user = user_load($uid);
     $params['account'] = $user;
     if (isset($user->field_assigned_santa[LANGUAGE_NONE][0]['uid']) && !empty($user->field_assigned_santa[LANGUAGE_NONE][0]['uid'])) {
@@ -183,7 +185,13 @@ function vi_new_send_emails() {
       $i++;
     }
   }
-  drupal_set_message(t('@count emails sent.', array('@count' => $i)));
+  if ($log) {
+    watchdog('santa_emails_sent', '@count emails were sent', array('@count' => $i));
+  }
+  else {
+    drupal_set_message(t('@count emails sent.', array('@count' => $i)));
+  }
+
 }
 
 /**
@@ -200,11 +208,8 @@ function vi_new_mail($key, &$message, $params) {
 /**
  * Start assign users
  */
-function vi_new_generate_list_start() {
-  $query = db_select('users', 'u')
-  // Select the whole record, so that format_username() has enough
-  // information.
-    ->fields('u', array('uid'));
+function vi_new_generate_list_start($log = FALSE) {
+  $query = db_select('users', 'u')->fields('u', array('uid'));
   $query->condition('u.uid', 0, '<>'); // Explicitly exclude the anonymous user.
   $query->orderBy('u.uid');
   $query->condition('u.uid', 1, '!=');
@@ -227,7 +232,12 @@ function vi_new_generate_list_start() {
     $user->field_assigned_santa[LANGUAGE_NONE][0]['uid'] = $assigned[$user->uid];
     user_save($user);
   }
-  drupal_set_message('All users assigned.');
+  if ($log) {
+    watchdog('santa_list_generate', 'All users assigned: @count', array('@count' => count($users)));
+  }
+  else {
+    drupal_set_message('All users assigned.');
+  }
 }
 
 /**
@@ -235,6 +245,7 @@ function vi_new_generate_list_start() {
  *
  * @param string $mailkey
  * @param object $language
+ * @param array $vars
  *
  * @return array
  */
@@ -266,5 +277,44 @@ function vi_new_mail_edit_text($mailkey, $language, $vars) {
 -- Главный Дед Мороз", $args, array('langcode' => $langcode));
       break;
   }
+
   return $return;
+}
+
+/**
+ * Implements hook_user_login().
+ */
+function vi_new_user_login(&$edit, $account) {
+  if (isset($account->field_assigned_santa[LANGUAGE_NONE][0]['uid']) && !empty($account->field_assigned_santa[LANGUAGE_NONE][0]['uid'])) {
+    $_GET['destination'] = 'user';
+    $edit['redirect'] = 'user';
+  }
+}
+
+/**
+ * Implements hook_cronapi().
+ */
+function vi_new_cronapi() {
+  $items['vi_new_assign_and_send_emails'] = array(
+    'description' => 'Assign santas and send emails',
+    // Execute job every day at 01:00
+    'rule' => '0 1 * * *',
+    'callback' => 'vi_new_assign_and_send_emails',
+  );
+
+  return $items;
+}
+
+/**
+ * Assign santas and send emails
+ */
+function vi_new_assign_and_send_emails() {
+  $timezone = variable_get('date_default_timezone', 'Europe/Moscow');
+  $countdown = variable_get('jquery_countdown_timer_date');
+  $date = new DateTime('now', new DateTimeZone($timezone));
+  if ($date->format('Y-m-d H:i') == $countdown) {
+    vi_new_generate_list_start(TRUE);
+    vi_new_send_emails(TRUE);
+    variable_set('user_register', 0);
+  }
 }

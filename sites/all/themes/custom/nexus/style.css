@@ -1497,6 +1497,7 @@ ul.inline, ul.links.inline {
 .button-wrapper #change-name :hover {
     background: url(images/change_name_button2.png) no-repeat;
 }
+
 body.logged-in .button-wrapper {
     display: none;
 }
@@ -1504,6 +1505,7 @@ body.logged-in .button-wrapper {
 .site-header .col-sm-6 {
     width: 62%;
 }
+
 .site-header .col-sm-6 h1#site-title {
     margin-top: 28px;
 }
@@ -1525,4 +1527,8 @@ body.logged-in .button-wrapper {
 #block-menu-menu-contact-menu li a.active {
     color: #fff;
     text-decoration: underline;
+}
+
+body.registration-closed .button-wrapper {
+    display: none;
 }
