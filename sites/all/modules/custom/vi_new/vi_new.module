@@ -214,19 +214,7 @@ function vi_new_generate_list_start($log = FALSE) {
   $query->orderBy('u.uid');
   $query->condition('u.uid', 1, '!=');
   $result = $query->execute()->fetchCol();
-
-  $assigned = array();
-  $sort_results = $result;
-  shuffle($sort_results);
-  foreach ($result as $key => $uid) {
-    if ($uid != $sort_results[$key]) {
-      $assigned[$uid] = $sort_results[$key];
-    }
-    else {
-      $assigned[$uid] = $sort_results[$key + 1];
-      $sort_results[$key + 1] = $uid;
-    }
-  }
+  $assigned = vi_new_generate_list_recursive($result);
   $users = user_load_multiple($result);
   foreach ($users as $user) {
     $user->field_assigned_santa[LANGUAGE_NONE][0]['uid'] = $assigned[$user->uid];
@@ -238,6 +226,32 @@ function vi_new_generate_list_start($log = FALSE) {
   else {
     drupal_set_message('All users assigned.');
   }
+}
+
+function vi_new_generate_list_recursive($result) {
+  $stop = FALSE;
+  $assigned = array();
+  $sort_results = $result;
+  shuffle($sort_results);
+  foreach ($result as $key => $uid) {
+    if ($uid != $sort_results[$key]) {
+      $assigned[$uid] = $sort_results[$key];
+    }
+    else {
+      if (isset($sort_results[$key + 1])) {
+        $assigned[$uid] = $sort_results[$key + 1];
+      }
+      else {
+        $stop = TRUE;
+        break;
+      }
+    }
+  }
+  if ($stop) {
+    return vi_new_generate_list_recursive($result);
+  }
+
+  return $assigned;
 }
 
 /**
@@ -312,9 +326,9 @@ function vi_new_assign_and_send_emails() {
   $timezone = variable_get('date_default_timezone', 'Europe/Moscow');
   $countdown = variable_get('jquery_countdown_timer_date');
   $date = new DateTime('now', new DateTimeZone($timezone));
-  if ($date->format('Y-m-d H:i') == $countdown) {
-    vi_new_generate_list_start(TRUE);
-    vi_new_send_emails(TRUE);
-    variable_set('user_register', 0);
-  }
+//  if ($date->format('Y-m-d H:i') == $countdown) {
+  vi_new_generate_list_start(TRUE);
+  vi_new_send_emails(TRUE);
+  variable_set('user_register', 0);
+//  }
 }
